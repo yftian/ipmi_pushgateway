@@ -25,7 +25,7 @@ scrape_configs:
         labels:
           instance: localhost
 ```  
-start prometheus  
+start prometheus container
 ```
 docker run  -d \
   -p 9090:9090 \
