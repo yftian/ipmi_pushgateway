@@ -8,7 +8,7 @@ ID | Name           | Type        | State    | Reading    | Units | Event
 8  | P1V1_SSB       | Voltage     | Nominal  | 1.12       | V     | 'OK'
 9  | P1V1_STBY_SSB  | Voltage     | Nominal  | 1.12       | V     | 'OK'
 10 | P3V3           | Voltage     | Nominal  | 3.17       | V     | 'OK'
-11 | P12V           | Voltage     | Nominal  | 11.90      | V     | 'OK'
+11 | P12V           | Voltage     | Nominal  | 7.90      | V     | 'OK'
 12 | P5V            | Voltage     | Nominal  | 5.00       | V     | 'OK'
 13 | TEMP_IBArea    | Temperature | Nominal  | 52.00      | C     | 'OK'
 14 | TEMP_PCHArea   | Temperature | Nominal  | 30.00      | C     | 'OK'

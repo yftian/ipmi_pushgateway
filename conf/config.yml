@@ -1,0 +1,52 @@
+global:
+  interval: 3
+  wait: 2
+  driver: LAN_2_0
+  type:
+    - ipmimonitoring
+    - ipmi-chassis
+
+ipmi:
+  - host: 192.168.44.12
+    user: root
+    pwd: yftian
+  - host: 192.168.44.13
+    user: root1
+    pwd: yftian2
+  - host: 192.168.44.14
+    user: root1
+    pwd: yftian2
+  - host: 192.168.44.15
+    user: root1
+    pwd: yftian2
+  - host: 192.168.44.16
+    user: root1
+    pwd: yftian2
+  - host: 192.168.44.17
+    user: root1
+    pwd: yftian2
+  - host: 192.168.44.18
+    user: root
+    pwd: yftian2
+  - host: 192.168.44.19
+    user: root
+    pwd: yftian
+  - host: 192.168.44.20
+    user: root1
+    pwd: yftian2
+  - host: 192.168.44.21
+    user: root1
+    pwd: yftian2
+  - host: 192.168.44.22
+    user: root1
+    pwd: yftian2
+  - host: 192.168.44.23
+    user: root1
+    pwd: yftian2
+  - host: 192.168.44.24
+    user: root1
+    pwd: yftian2
+  - host: 192.168.44.25
+    user: root
+    pwd: yftian2
+
