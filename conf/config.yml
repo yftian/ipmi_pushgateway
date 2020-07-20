@@ -1,4 +1,6 @@
 global:
+  pushgateway: http://192.168.37.128:9091
+  job: ipmi
   interval: 3
   wait: 2
   driver: LAN_2_0

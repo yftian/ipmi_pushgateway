@@ -22,6 +22,8 @@ import (
 
 type Config struct {
 	Global struct {
+		Pushurl  string
+		Job      string
 		Interval int
 		Wait     int
 		Driver   string
@@ -91,8 +93,8 @@ func execute(cmdStr string, cmdArgs string) ([]byte, error) {
 	}
 	log.Info(cmd.Args) //print current cmd
 
-	cmdPid := &cmd.Process.Pid
-	log.Info("cmd pid:", cmdPid) //print cmd pid
+	//cmdPid := &cmd.Process.Pid
+	//log.Info("cmd pid:", cmdPid) //print cmd pid
 
 	var res int
 	if err := cmd.Wait(); err != nil {
@@ -160,7 +162,7 @@ func collectMonitoring(index int, Config Config) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(config.Global.Wait))
 	defer cancel()
 
-	pusher := push.New("http://192.168.37.128:9091", "ipmi")
+	pusher := push.New(Config.Global.Pushurl, Config.Global.Job)
 	var ipmiGauge *prometheus.GaugeVec
 	var ipmiGaugeState *prometheus.GaugeVec
 	var ChassSystemPowerGaugeState *prometheus.GaugeVec
@@ -171,12 +173,12 @@ func collectMonitoring(index int, Config Config) {
 	for _, Mclass := range Config.Global.Type {
 		switch Mclass {
 		case "ipmimonitoring":
-			//		//	output,err := execute("ipmimonitoring","-D " + Config.Global.Driver +
-			//		//		" -h " + Config.Ipmi[index].Host + " -u " + Config.Ipmi[index].User + " -p "+ Config.Ipmi[index].Pwd)
-			//		//	if err != nil {
-			//		//		panic(err)
-			//		//	}
-			output := readFile("sugonIPMI.txt")
+			output, err := execute("ipmimonitoring", "-D "+Config.Global.Driver+
+				" -h "+Config.Ipmi[index].Host+" -u "+Config.Ipmi[index].User+" -p "+Config.Ipmi[index].Pwd)
+			if err != nil {
+				log.Error(err)
+			}
+			//output := readFile("sugonIPMI.txt")
 			results, err := splitMonitoringOutput(output)
 			if err != nil {
 				log.Error(err.Error())
