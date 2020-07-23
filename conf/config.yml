@@ -1,7 +1,7 @@
 global:
   pushgateway: http://192.168.37.128:9091
   job: ipmi
-  interval: 3
+  interval: 5
   wait: 2
   driver: LAN_2_0
   type:
@@ -21,34 +21,34 @@ ipmi:
   - host: 192.168.44.15
     user: root1
     pwd: yftian2
-  - host: 192.168.44.16
-    user: root1
-    pwd: yftian2
-  - host: 192.168.44.17
-    user: root1
-    pwd: yftian2
-  - host: 192.168.44.18
-    user: root
-    pwd: yftian2
-  - host: 192.168.44.19
-    user: root
-    pwd: yftian
-  - host: 192.168.44.20
-    user: root1
-    pwd: yftian2
-  - host: 192.168.44.21
-    user: root1
-    pwd: yftian2
-  - host: 192.168.44.22
-    user: root1
-    pwd: yftian2
-  - host: 192.168.44.23
-    user: root1
-    pwd: yftian2
-  - host: 192.168.44.24
-    user: root1
-    pwd: yftian2
-  - host: 192.168.44.25
-    user: root
-    pwd: yftian2
+#  - host: 192.168.44.16
+#    user: root1
+#    pwd: yftian2
+#  - host: 192.168.44.17
+#    user: root1
+#    pwd: yftian2
+#  - host: 192.168.44.18
+#    user: root
+#    pwd: yftian2
+#  - host: 192.168.44.19
+#    user: root
+#    pwd: yftian
+#  - host: 192.168.44.20
+#    user: root1
+#    pwd: yftian2
+#  - host: 192.168.44.21
+#    user: root1
+#    pwd: yftian2
+#  - host: 192.168.44.22
+#    user: root1
+#    pwd: yftian2
+#  - host: 192.168.44.23
+#    user: root1
+#    pwd: yftian2
+#  - host: 192.168.44.24
+#    user: root1
+#    pwd: yftian2
+#  - host: 192.168.44.25
+#    user: root
+#    pwd: yftian2
 

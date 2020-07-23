@@ -24,6 +24,11 @@ scrape_configs:
       - targets: ['192.168.91.132:9100']
         labels:
           instance: localhost
+  - job_name: pushgateway
+    static_configs:
+      - targets: ['192.168.91.132:9091']
+        labels:
+          instance: pushgateway
 ```  
 start prometheus container
 ```
