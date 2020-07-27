@@ -15,10 +15,6 @@
         <rollingfile formatid="main" type="size" filename="./log/default.log" maxsize="104857600" maxrolls="5" />
     </outputs>
     <formats>
-<!--        <format id="colored-default"  format="%EscM(38)%Date %Time [%LEV] %File:%Line | %Msg%n%EscM(0)"/>-->
-<!--        <format id="colored-warn"  format="%EscM(33)%Date %Time [%LEV] %File:%Line | %Msg%n%EscM(0)"/>-->
-<!--        <format id="colored-error"  format="%EscM(31)%Date %Time [%LEV] %File:%Line | %Msg%n%EscM(0)"/>-->
-<!--        <format id="main" format="%Date %Time [%LEV] %File:%Line | %Msg%n"/>-->
         <format id="colored-default"  format="%Date %Time [%LEV] %File:%Line | %Msg%n"/>
         <format id="colored-warn"  format="%Date %Time [%LEV] %File:%Line | %Msg%n"/>
         <format id="colored-error"  format="%Date %Time [%LEV] %File:%Line | %Msg%n"/>

@@ -10,13 +10,28 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/push"
 	"github.com/robfig/cron/v3"
+	"github.com/takama/daemon"
 	"io/ioutil"
 	"math"
+	"os"
 	"os/exec"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
+
+const (
+	// name of the service
+	name        = "ipmi_job"
+	description = "Ipmi job service example"
+)
+
+// Service is the daemon service struct
+type Service struct {
+	daemon.Daemon
+}
 
 type Config struct {
 	Global struct {
@@ -305,18 +320,66 @@ func collectMonitoring(index int, Config Config) {
 	}
 }
 
-func main() {
+// Manage by daemon commands or run the daemon
+func (service *Service) Manage() (string, error) {
+
+	usage := "Usage: cron_job install | remove | start | stop | status"
+	// If received any kind of command, do it
+	if len(os.Args) > 1 {
+		command := os.Args[1]
+		switch command {
+		case "install":
+			return service.Install()
+		case "remove":
+			return service.Remove()
+		case "start":
+			return service.Start()
+		case "stop":
+			// No need to explicitly stop cron since job will be killed
+			return service.Stop()
+		case "status":
+			return service.Status()
+		default:
+			return usage, nil
+		}
+	}
+	// Set up channel on which to send signal notifications.
+	// We must use a buffered channel or risk missing the signal
+	// if we're not ready to receive when the signal is sent.
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt, os.Kill, syscall.SIGTERM)
+
+	// Create a new cron manager
 	c := cron.New(cron.WithSeconds())
-	spec := "*/" + strconv.Itoa(config.Global.Interval) + " * * * * *"
-	c.AddFunc(spec, func() {
-		go monitor(config)
+	// Run makefile every min
+	c.AddFunc("*/" + strconv.Itoa(config.Global.Interval) + " * * * * *", func() {
+		monitor()
 	})
 	c.Start()
 	select {}
+	// Waiting for interrupt by system signal
+	killSignal := <-interrupt
+	log.Info("Got signal:", killSignal)
+	return "Service exited", nil
+}
+
+func main() {
+	srv, err := daemon.New(name, description, daemon.SystemDaemon)
+	if err != nil {
+		log.Error("Error: ", err)
+		os.Exit(1)
+	}
+	service := &Service{srv}
+	status, err := service.Manage()
+	if err != nil {
+		log.Error(status, "\nError: ", err)
+		os.Exit(1)
+	}
+	fmt.Println(status)
 }
 
 // 单独的监控协程
-func monitor(config Config) {
+func monitor() {
 	for i, _ := range config.Ipmi {
 		go collectMonitoring(i, config)
 	}
