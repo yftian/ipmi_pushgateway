@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
+	"github.com/cdevr/WapSNMP"
 	log "github.com/cihub/seelog"
 	"github.com/jinzhu/configor"
 	"github.com/prometheus/client_golang/prometheus"
@@ -26,6 +27,12 @@ const (
 	// name of the service
 	name        = "ipmi_job"
 	description = "Ipmi job service example"
+
+	READ_COMM = "public"
+	WRITE_COMM = "private"
+
+	SNMP_CONN_FAIL = 1
+	SNMP_OID_FAIL = 1
 )
 
 // Service is the daemon service struct
@@ -50,6 +57,18 @@ type Config struct {
 	}
 }
 
+type Snmp struct {
+	Lcp_ips []string
+	Lcp_oids []string
+
+	Cool_ips []string
+	Cool_oids []string
+
+	Pdu_ips []string
+	Pdu_am_oids []string
+	Pdu_on_oids []string
+}
+
 type sensorData struct {
 	ID    int64
 	Name  string
@@ -67,11 +86,14 @@ type chassis struct {
 
 var (
 	config = Config{}
+	snmp = Snmp{}
 )
 
 func init() {
 	configor.Load(&config, "./conf/config.yml")
+	configor.Load(&snmp,"./conf/snmp.yml")
 
+	//log section
 	defer log.Flush()
 	logger, err := log.LoggerFromConfigAsFile("./conf/logconf.xml")
 	if err != nil {
@@ -79,6 +101,7 @@ func init() {
 		return
 	}
 	log.ReplaceLogger(logger)
+
 }
 
 func readFile(filename string) []byte {
@@ -308,13 +331,13 @@ func collectMonitoring(index int, Config Config) {
 	}
 	select {
 	case <-ctx.Done():
-		log.Error("收到超时信号，监控退出,", Config.Ipmi[index].Host)
+		log.Error("收到超时信号，ipmi监控退出,", Config.Ipmi[index].Host)
 		return
 	default:
 		if pushFlag {
-			log.Info("goroutine监控中，", "设备:", config.Ipmi[index].Host)
+			log.Info("ipmi goroutine监控中，", "设备:", config.Ipmi[index].Host)
 		} else {
-			log.Error("goroutine监控失败,设备",config.Ipmi[index].Host)
+			log.Error("ipmi goroutine监控失败,设备",config.Ipmi[index].Host)
 		}
 
 	}
@@ -353,7 +376,7 @@ func (service *Service) Manage() (string, error) {
 	c := cron.New(cron.WithSeconds())
 	// Run makefile every min
 	c.AddFunc("*/" + strconv.Itoa(config.Global.Interval) + " * * * * *", func() {
-		monitor()
+		IPMIMonitor()
 	})
 	c.Start()
 	select {}
@@ -378,9 +401,84 @@ func main() {
 	fmt.Println(status)
 }
 
-// 单独的监控协程
-func monitor() {
+// 单独的IPMI监控协程
+func IPMIMonitor() {
 	for i, _ := range config.Ipmi {
 		go collectMonitoring(i, config)
 	}
+}
+
+func parseSnmp(ip string, oid wapsnmp.Oid,flag string) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(config.Global.Wait))
+	defer cancel()
+
+	var pushFlag bool
+	var snmpGauge *prometheus.GaugeVec
+	pusher := push.New(Config.Global.Pushgateway, Config.Global.Job)
+
+
+	session, err := wapsnmp.NewWapSNMP(ip, READ_COMM, wapsnmp.SNMPv2c, 2*time.Second, 1)
+	if err != nil {
+		log.Error("Error creating session => %v\n", err)
+		log.Error(SNMP_CONN_FAIL, err)
+	}
+
+	defer session.Close()
+
+	oidMap := make(map[string]interface{})
+
+	val, err := session.Get(oid)
+	if err != nil {
+		log.Error("Error getting => %v\n", err)
+		log.Error(SNMP_OID_FAIL, err)
+	}
+	value := strconv.FormatInt(val.(float64), 10)
+
+	snmpGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: flag,
+		Help: "help..",
+	}, []string{"type", "Host", "Oid"})
+	snmpGauge.WithLabelValues(flag, ip, oid).Set(value)
+
+	pusher.Collector(snmpGauge)
+
+	select {
+	case <-ctx.Done():
+		log.Error("收到超时信号，snmp监控退出,", ip)
+		return
+	default:
+		if pushFlag {
+			log.Info("snmp goroutine监控中，", "设备:", config.Ipmi[index].Host)
+		} else {
+			log.Error("snmp goroutine监控失败,设备",config.Ipmi[index].Host)
+		}
+
+	}
+
+
+}
+
+func SNMPMonitor() {
+	for _,lcp_ip := range snmp.Lcp_ips{
+		for _, oid := range snmp.Lcp_oids {
+			go parseSnmp(lcp_ip,oid,"LCP")
+		}
+	}
+	for _,cool_ip := range snmp.Cool_ips{
+		for _,cool_oid := range snmp.Cool_oids{
+			go parseSnmp(cool_ip,cool_oid,"COOLOR")
+		}
+	}
+
+	for _,pdu_ip := range snmp.Pdu_ips{
+		for _,am_oid := range snmp.Pdu_am_oids{
+			go parseSnmp(pdu_ip,am_oid,"PDU_AM")
+		}
+		for _,on_oid := range snmp.Pdu_on_oids{
+			go parseSnmp(pdu_ip,on_oid,"PDU_ON")
+		}
+	}
+
+
+
 }
