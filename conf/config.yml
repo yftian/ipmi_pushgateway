@@ -1,12 +1,14 @@
 global:
   pushgateway: http://192.168.37.128:9091
-  job: ipmi
+  ipmijob: ipmi
+  snmpjob: snmp
   interval: 5
   wait: 2
   driver: LAN_2_0
   type:
     - ipmimonitoring
     - ipmi-chassis
+    - ipmi-dcmi
 
 ipmi:
   - host: 192.168.44.12

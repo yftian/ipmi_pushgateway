@@ -28,11 +28,8 @@ const (
 	name        = "ipmi_job"
 	description = "Ipmi job service example"
 
-	READ_COMM = "public"
+	READ_COMM  = "public"
 	WRITE_COMM = "private"
-
-	SNMP_CONN_FAIL = 1
-	SNMP_OID_FAIL = 1
 )
 
 // Service is the daemon service struct
@@ -42,12 +39,13 @@ type Service struct {
 
 type Config struct {
 	Global struct {
-		Pushgateway  string
-		Job      string
-		Interval int
-		Wait     int
-		Driver   string
-		Type     []string
+		Pushgateway string
+		IPMIJob     string
+		SNMPJob     string
+		Interval    int
+		Wait        int
+		Driver      string
+		Type        []string
 	}
 
 	Ipmi []struct {
@@ -58,13 +56,13 @@ type Config struct {
 }
 
 type Snmp struct {
-	Lcp_ips []string
+	Lcp_ips  []string
 	Lcp_oids []string
 
-	Cool_ips []string
+	Cool_ips  []string
 	Cool_oids []string
 
-	Pdu_ips []string
+	Pdu_ips     []string
 	Pdu_am_oids []string
 	Pdu_on_oids []string
 }
@@ -79,19 +77,19 @@ type sensorData struct {
 	Event string
 }
 
-type chassis struct {
-	Name string
+type ipmiFiled struct {
+	Name   string
 	Status string
 }
 
 var (
 	config = Config{}
-	snmp = Snmp{}
+	snmp   = Snmp{}
 )
 
 func init() {
 	configor.Load(&config, "./conf/config.yml")
-	configor.Load(&snmp,"./conf/snmp.yml")
+	//configor.Load(&snmp, "./conf/snmp.yml")
 
 	//log section
 	defer log.Flush()
@@ -104,14 +102,13 @@ func init() {
 
 }
 
-func readFile(filename string) []byte {
+func readFile(filename string) ([]byte,error) {
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		log.Error("File reading error", err.Error())
 	}
-	return data
+	return data,err
 }
-
 
 func splitMonitoringOutput(impiOutput []byte) ([]sensorData, error) {
 	var result []sensorData
@@ -133,8 +130,13 @@ func splitMonitoringOutput(impiOutput []byte) ([]sensorData, error) {
 		}
 		if len(strings.Fields(line[1])) > 1 {
 			data.Name = strings.ReplaceAll(line[1], " ", "_")
+			data.Name = strings.ReplaceAll(data.Name, "/", "")
 		} else {
 			data.Name = line[1]
+		}
+		if strings.Index(data.Name, "-") == 2 {
+			data.Name = data.Name[3:]
+			data.Name = strings.ReplaceAll(data.Name, "-", "_")
 		}
 
 		data.Type = line[2]
@@ -157,7 +159,7 @@ func splitMonitoringOutput(impiOutput []byte) ([]sensorData, error) {
 	return result, err
 }
 
-func getChassState(str string,subStr string) float64 {
+func getState(str string, subStr string) float64 {
 	if strings.Contains(str, subStr) {
 		return 1
 	}
@@ -178,8 +180,8 @@ func execute(name string, args []string) ([]byte, error) {
 	return out.Bytes(), err
 }
 
-func splitClassOutput(output []byte) ([]chassis,error) {
-	var chass []chassis
+func splitBaseOutput(output []byte) ([]ipmiFiled, error) {
+	var chass []ipmiFiled
 	r := csv.NewReader(bytes.NewReader(output))
 	records, err := r.ReadAll()
 	for _, line := range records {
@@ -189,16 +191,16 @@ func splitClassOutput(output []byte) ([]chassis,error) {
 			line[i] = strings.Trim(line[i], " ")
 		}
 
-		var cha chassis
+		var cha ipmiFiled
 		if len(strings.Fields(line[0])) > 1 {
 			cha.Name = strings.ReplaceAll(line[0], " ", "_")
 		} else {
 			cha.Name = line[1]
 		}
 		cha.Status = line[1]
-		chass = append(chass,cha)
+		chass = append(chass, cha)
 	}
-	return chass,err
+	return chass, err
 }
 
 //ipmimonitoring -D LAN_2_0 -h remote_ip -u username -p password
@@ -212,10 +214,8 @@ func collectMonitoring(index int, Config Config) {
 	for _, Mclass := range Config.Global.Type {
 		switch Mclass {
 		case "ipmimonitoring":
-			pusher := push.New(Config.Global.Pushgateway, Config.Global.Job)
-			var ipmiGauge *prometheus.GaugeVec
-			var ipmiGaugeState *prometheus.GaugeVec
-			//output := readFile("./sugonIPMI.txt")
+			pusher := push.New(Config.Global.Pushgateway, Config.Global.IPMIJob)
+			//output := readFile("./hpIPMI.txt")
 			output, err := execute("ipmimonitoring", []string{
 				"-D", Config.Global.Driver,
 				"-h", Config.Ipmi[index].Host,
@@ -223,43 +223,55 @@ func collectMonitoring(index int, Config Config) {
 				"-p", Config.Ipmi[index].Pwd})
 			if err != nil {
 				log.Error(err.Error())
-				continue
-			}
-			results, err := splitMonitoringOutput(output)
-			if err != nil {
-				log.Error(err.Error())
-				continue
-			}
+				ipmiErrGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+					Name: "MonitorMessage",
+					Help: "",
+				}, []string{"Host", "State", "message"})
+				ipmiErrGauge.WithLabelValues(Config.Ipmi[index].Host, "Error",err.Error())
+				pusher.Collector(ipmiErrGauge)
+			} else {
+				results, err := splitMonitoringOutput(output)
+				if err != nil {
+					log.Error(err.Error())
+					ipmiErrGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+						Name: "MonitorMessage",
+						Help: "",
+					}, []string{"Host", "State", "message"})
+					ipmiErrGauge.WithLabelValues(Config.Ipmi[index].Host, "Error",err.Error())
+					pusher.Collector(ipmiErrGauge)
+				} else {
+					for _, data := range results {
+						var state float64
+						switch data.State {
+						case "Nominal":
+							state = 0
+						case "Warning":
+							state = 1
+						case "Critical":
+							state = 2
+						case "N/A":
+							state = math.NaN()
+						default:
+							state = math.NaN()
+							log.Error(data.State)
+						}
 
-			for _, data := range results {
-				var state float64
-				switch data.State {
-				case "Nominal":
-					state = 0
-				case "Warning":
-					state = 1
-				case "Critical":
-					state = 2
-				case "N/A":
-					state = math.NaN()
-				default:
-					state = math.NaN()
-					log.Error(data.State)
+						ipmiGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+							Name: data.Name,
+							Help: "help..",
+						}, []string{"Name", "Host", "Event", "State", "Type", "Unit", "Id"})
+						ipmiGaugeState := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+							Name: data.Name + "_state",
+							Help: "help..",
+						}, []string{"Name", "Host", "Event", "State", "Type", "Unit", "Id"})
+						ipmiGauge.WithLabelValues(data.Name, config.Ipmi[index].Host, data.Event, data.State, data.Type, data.Unit, strconv.FormatInt(data.ID, 10)).Set(data.Value)
+						ipmiGaugeState.WithLabelValues(data.Name, config.Ipmi[index].Host, data.Event, data.State, data.Type, data.Unit, strconv.FormatInt(data.ID, 10)).Set(state)
+						pusher.Collector(ipmiGauge)
+						pusher.Collector(ipmiGaugeState)
+					}
 				}
-
-				ipmiGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-					Name: data.Name,
-					Help: "help..",
-				}, []string{"Name", "Host", "Event", "Stata", "Type", "Unit", "Id"})
-				ipmiGaugeState = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-					Name: data.Name + "_state",
-					Help: "help..",
-				}, []string{"Name", "Host", "Event", "Stata", "Type", "Unit", "Id"})
-				ipmiGauge.WithLabelValues(data.Name, config.Ipmi[index].Host, data.Event, data.State, data.Type, data.Unit, strconv.FormatInt(data.ID, 10)).Set(data.Value)
-				ipmiGaugeState.WithLabelValues(data.Name, config.Ipmi[index].Host, data.Event, data.State, data.Type, data.Unit, strconv.FormatInt(data.ID, 10)).Set(state)
-				pusher.Collector(ipmiGauge)
-				pusher.Collector(ipmiGaugeState)
 			}
+
 			instanceName := "ipmi_" + config.Ipmi[index].Host
 			if err := pusher.Grouping("instance", instanceName).Push(); err != nil {
 				//log.Error("Could not push completion time to Pushgateway:", err)
@@ -269,7 +281,8 @@ func collectMonitoring(index int, Config Config) {
 				log.Info("ipmi push success", config.Ipmi[index].Host)
 			}
 		case "ipmi-chassis":
-			pusher := push.New(Config.Global.Pushgateway, Config.Global.Job)
+			pusher := push.New(Config.Global.Pushgateway, Config.Global.IPMIJob)
+			//output:= readFile("./sugonClass.txt")
 			output, err := execute("ipmi-chassis", []string{
 				"-D", Config.Global.Driver,
 				"-h", Config.Ipmi[index].Host,
@@ -278,50 +291,184 @@ func collectMonitoring(index int, Config Config) {
 				"--get-status"})
 			if err != nil {
 				log.Error(err.Error())
-				continue
-			}
-			//output:= readFile("./sugonClass.txt")
-			chass,err := splitClassOutput(output)
-			if err != nil{
-				log.Error(err.Error())
-				continue
-			}
-			for _, cha := range chass {
-				switch cha.Name {
-				case "System_Power":
-					chaGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
-					Name: cha.Name,
+				ipmiErrGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+					Name: "ChassisMessage",
 					Help: "",
-					},[]string{"Host"})
-					chaGauge.WithLabelValues(Config.Ipmi[index].Host).Set(getChassState(cha.Status,"on"))
-					pusher.Collector(chaGauge)
-				case "Power_fault":
-					chaGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
-						Name: cha.Name,
+				}, []string{"Host", "State", "message"})
+				ipmiErrGauge.WithLabelValues(Config.Ipmi[index].Host, "Error",err.Error())
+				pusher.Collector(ipmiErrGauge)
+			} else {
+				chass, err := splitBaseOutput(output)
+				if err != nil {
+					log.Error(err.Error())
+					ipmiErrGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+						Name: "ChassisMessage",
 						Help: "",
-					},[]string{"Host"})
-					chaGauge.WithLabelValues(Config.Ipmi[index].Host).Set(getChassState(cha.Status,"false"))
-					pusher.Collector(chaGauge)
-				case "Drive_Fault":
-					chaGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
-						Name: cha.Name,
-						Help: "",
-					},[]string{"Host"})
-					chaGauge.WithLabelValues(Config.Ipmi[index].Host).Set(getChassState(cha.Status,"false"))
-					pusher.Collector(chaGauge)
-				case "Cooling/fan_fault":
-					chaGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
-						Name: "fan_fault",
-						Help: "",
-					},[]string{"Host"})
-					chaGauge.WithLabelValues(Config.Ipmi[index].Host).Set(getChassState(cha.Status,"false"))
-					pusher.Collector(chaGauge)
+					}, []string{"Host", "State", "message"})
+					ipmiErrGauge.WithLabelValues(Config.Ipmi[index].Host, "Error",err.Error())
+					pusher.Collector(ipmiErrGauge)
+				} else {
+					for _, cha := range chass {
+						switch cha.Name {
+						case "System_Power":
+							chaGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+								Name: cha.Name,
+								Help: "",
+							}, []string{"Host"})
+							chaGauge.WithLabelValues(Config.Ipmi[index].Host).Set(getState(cha.Status, "on"))
+							pusher.Collector(chaGauge)
+						case "Power_fault":
+							chaGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+								Name: cha.Name,
+								Help: "",
+							}, []string{"Host"})
+							chaGauge.WithLabelValues(Config.Ipmi[index].Host).Set(getState(cha.Status, "false"))
+							pusher.Collector(chaGauge)
+						case "Drive_Fault":
+							chaGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+								Name: cha.Name,
+								Help: "",
+							}, []string{"Host"})
+							chaGauge.WithLabelValues(Config.Ipmi[index].Host).Set(getState(cha.Status, "false"))
+							pusher.Collector(chaGauge)
+						case "Cooling/fan_fault":
+							chaGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+								Name: "fan_fault",
+								Help: "",
+							}, []string{"Host"})
+							chaGauge.WithLabelValues(Config.Ipmi[index].Host).Set(getState(cha.Status, "false"))
+							pusher.Collector(chaGauge)
+						}
+					}
 				}
 			}
-
 			instanceName := "class_" + config.Ipmi[index].Host
 			if err := pusher.Grouping("instance", instanceName).Push(); err != nil {
-				log.Error("Could not push completion to Pushgateway:",config.Ipmi[index].Host, err)
+				log.Error("Could not push completion to Pushgateway:", config.Ipmi[index].Host, err)
+				return
+			} else {
+				pushFlag = true
+				log.Info("chassis push success:", config.Ipmi[index].Host)
+			}
+		case "ipmi-dcmi":
+			pusher := push.New(Config.Global.Pushgateway, Config.Global.IPMIJob)
+			//output,err := readFile("./file/dugonDcmi.txt")
+			output, err := execute("ipmi-dcmi", []string{
+				"-D", Config.Global.Driver,
+				"-h", Config.Ipmi[index].Host,
+				"-u", Config.Ipmi[index].User,
+				"-p", Config.Ipmi[index].Pwd,
+				"--get-system-power-statistics"})
+			if err != nil {
+				log.Error(err.Error())
+				ipmiErrGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+					Name: "DcmiMessage",
+					Help: "",
+				}, []string{"Host", "State", "message"})
+				ipmiErrGauge.WithLabelValues(Config.Ipmi[index].Host, "Error",err.Error())
+				pusher.Collector(ipmiErrGauge)
+			} else {
+				dcmis,err := splitBaseOutput(output)
+				if err != nil {
+					log.Error(err.Error())
+					ipmiErrGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+						Name: "DcmiMessage",
+						Help: "",
+					}, []string{"Host", "State", "message"})
+					ipmiErrGauge.WithLabelValues(Config.Ipmi[index].Host, "Error",err.Error())
+					pusher.Collector(ipmiErrGauge)
+				} else {
+					for _, dcmi := range dcmis {
+						switch dcmi.Name {
+						case "Current_Power":
+							dcmiGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+								Name: "Current_Power",
+								Help: "",
+							}, []string{"Host","Unit"})
+							values := strings.Split(dcmi.Status," ")
+							val,err := strconv.ParseFloat(values[0], 64)
+							if err != nil {
+								log.Error(err.Error())
+							}
+							dcmiGauge.WithLabelValues(Config.Ipmi[index].Host,values[1]).Set(val)
+							pusher.Collector(dcmiGauge)
+						case "Minimum_Power_over_sampling_duration":
+							dcmiGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+								Name: "Minimum_Power_over_sampling_duration",
+								Help: "",
+							}, []string{"Host","Unit"})
+							values := strings.Split(dcmi.Status," ")
+							val,err := strconv.ParseFloat(values[0], 64)
+							if err != nil {
+								log.Error(err.Error())
+							}
+							dcmiGauge.WithLabelValues(Config.Ipmi[index].Host,values[1]).Set(val)
+							pusher.Collector(dcmiGauge)
+						case "Maximum_Power_over_sampling_duration":
+							dcmiGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+								Name: "Maximum_Power_over_sampling_duration",
+								Help: "",
+							}, []string{"Host","Unit"})
+							values := strings.Split(dcmi.Status," ")
+							val,err := strconv.ParseFloat(values[0], 64)
+							if err != nil {
+								log.Error(err.Error())
+							}
+							dcmiGauge.WithLabelValues(Config.Ipmi[index].Host,values[1]).Set(val)
+							pusher.Collector(dcmiGauge)
+						case "Average_Power_over_sampling_duration":
+							dcmiGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+								Name: "Average_Power_over_sampling_duration",
+								Help: "",
+							}, []string{"Host","Unit"})
+							values := strings.Split(dcmi.Status," ")
+							val,err := strconv.ParseFloat(values[0], 64)
+							if err != nil {
+								log.Error(err.Error())
+							}
+							dcmiGauge.WithLabelValues(Config.Ipmi[index].Host,values[1]).Set(val)
+							pusher.Collector(dcmiGauge)
+						case "Time_Stamp":
+							dcmiGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+								Name: "Time_Stamp",
+								Help: "",
+							}, []string{"Host","Time_Stamp"})
+							if err != nil {
+								log.Error(err.Error())
+							}
+							dcmiGauge.WithLabelValues(Config.Ipmi[index].Host,dcmi.Status).Set(0)
+							pusher.Collector(dcmiGauge)
+						case "Statistics_reporting_time_period":
+							dcmiGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+								Name: "Statistics_reporting_time_period",
+								Help: "",
+							}, []string{"Host","Unit"})
+							values := strings.Split(dcmi.Status," ")
+							val,err := strconv.ParseFloat(values[0], 64)
+							if err != nil {
+								log.Error(err.Error())
+							}
+							dcmiGauge.WithLabelValues(Config.Ipmi[index].Host,values[1]).Set(val)
+							pusher.Collector(dcmiGauge)
+						case "Power_Measurement":
+							dcmiGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+								Name: "Power_Measurement",
+								Help: "",
+							}, []string{"Host"})
+							if err != nil {
+								log.Error(err.Error())
+							}
+							dcmiGauge.WithLabelValues(Config.Ipmi[index].Host).Set(getState(dcmi.Status,"Active"))
+							pusher.Collector(dcmiGauge)
+						}
+					}
+				}
+
+
+			}
+			instanceName := "dcmi_" + config.Ipmi[index].Host
+			if err := pusher.Grouping("instance", instanceName).Push(); err != nil {
+				log.Error("Could not push completion to Pushgateway:", config.Ipmi[index].Host, err)
 				return
 			} else {
 				pushFlag = true
@@ -337,7 +484,7 @@ func collectMonitoring(index int, Config Config) {
 		if pushFlag {
 			log.Info("ipmi goroutine监控中，", "设备:", config.Ipmi[index].Host)
 		} else {
-			log.Error("ipmi goroutine监控失败,设备",config.Ipmi[index].Host)
+			log.Error("ipmi goroutine监控失败,设备", config.Ipmi[index].Host)
 		}
 
 	}
@@ -375,7 +522,7 @@ func (service *Service) Manage() (string, error) {
 	// Create a new cron manager
 	c := cron.New(cron.WithSeconds())
 	// Run makefile every min
-	c.AddFunc("*/" + strconv.Itoa(config.Global.Interval) + " * * * * *", func() {
+	c.AddFunc("*/"+strconv.Itoa(config.Global.Interval)+" * * * * *", func() {
 		IPMIMonitor()
 	})
 	c.Start()
@@ -398,7 +545,6 @@ func main() {
 		log.Error(status, "\nError: ", err)
 		os.Exit(1)
 	}
-	fmt.Println(status)
 }
 
 // 单独的IPMI监控协程
@@ -408,31 +554,25 @@ func IPMIMonitor() {
 	}
 }
 
-func parseSnmp(ip string, oid wapsnmp.Oid,flag string) {
+func parseSnmp(ip string, oid string, flag string) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(config.Global.Wait))
 	defer cancel()
 
 	var pushFlag bool
 	var snmpGauge *prometheus.GaugeVec
-	pusher := push.New(Config.Global.Pushgateway, Config.Global.Job)
-
+	pusher := push.New(config.Global.Pushgateway, config.Global.SNMPJob)
 
 	session, err := wapsnmp.NewWapSNMP(ip, READ_COMM, wapsnmp.SNMPv2c, 2*time.Second, 1)
 	if err != nil {
-		log.Error("Error creating session => %v\n", err)
-		log.Error(SNMP_CONN_FAIL, err)
+		log.Error("SNMP_CONN_FAIL creating session => %v\n", err)
 	}
-
 	defer session.Close()
 
-	oidMap := make(map[string]interface{})
-
-	val, err := session.Get(oid)
+	val, err := session.Get(wapsnmp.MustParseOid(oid))
 	if err != nil {
-		log.Error("Error getting => %v\n", err)
-		log.Error(SNMP_OID_FAIL, err)
+		log.Error("SNMP_OID_FAIL getting => %v\n", err)
 	}
-	value := strconv.FormatInt(val.(float64), 10)
+	value := val.(float64)
 
 	snmpGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: flag,
@@ -448,37 +588,32 @@ func parseSnmp(ip string, oid wapsnmp.Oid,flag string) {
 		return
 	default:
 		if pushFlag {
-			log.Info("snmp goroutine监控中，", "设备:", config.Ipmi[index].Host)
+			log.Info("snmp goroutine监控中，", "设备:", ip)
 		} else {
-			log.Error("snmp goroutine监控失败,设备",config.Ipmi[index].Host)
+			log.Error("snmp goroutine监控失败,设备", ip)
 		}
-
 	}
-
 
 }
 
 func SNMPMonitor() {
-	for _,lcp_ip := range snmp.Lcp_ips{
+	for _, lcp_ip := range snmp.Lcp_ips {
 		for _, oid := range snmp.Lcp_oids {
-			go parseSnmp(lcp_ip,oid,"LCP")
+			go parseSnmp(lcp_ip, oid, "LCP")
 		}
 	}
-	for _,cool_ip := range snmp.Cool_ips{
-		for _,cool_oid := range snmp.Cool_oids{
-			go parseSnmp(cool_ip,cool_oid,"COOLOR")
+	for _, cool_ip := range snmp.Cool_ips {
+		for _, cool_oid := range snmp.Cool_oids {
+			go parseSnmp(cool_ip, cool_oid, "COOLOR")
 		}
 	}
-
-	for _,pdu_ip := range snmp.Pdu_ips{
-		for _,am_oid := range snmp.Pdu_am_oids{
-			go parseSnmp(pdu_ip,am_oid,"PDU_AM")
+	for _, pdu_ip := range snmp.Pdu_ips {
+		for _, am_oid := range snmp.Pdu_am_oids {
+			go parseSnmp(pdu_ip, am_oid, "PDU_AM")
 		}
-		for _,on_oid := range snmp.Pdu_on_oids{
-			go parseSnmp(pdu_ip,on_oid,"PDU_ON")
+		for _, on_oid := range snmp.Pdu_on_oids {
+			go parseSnmp(pdu_ip, on_oid, "PDU_ON")
 		}
 	}
-
-
 
 }
