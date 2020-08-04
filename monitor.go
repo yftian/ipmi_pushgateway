@@ -215,12 +215,12 @@ func collectMonitoring(index int, Config Config) {
 		switch Mclass {
 		case "ipmimonitoring":
 			pusher := push.New(Config.Global.Pushgateway, Config.Global.IPMIJob)
-			output,err := readFile("./file/hpIPMI.txt")
-			//output, err := execute("ipmimonitoring", []string{
-			//	"-D", Config.Global.Driver,
-			//	"-h", Config.Ipmi[index].Host,
-			//	"-u", Config.Ipmi[index].User,
-			//	"-p", Config.Ipmi[index].Pwd})
+			//output,err := readFile("./file/hpIPMI.txt")
+			output, err := execute("ipmimonitoring", []string{
+				"-D", Config.Global.Driver,
+				"-h", Config.Ipmi[index].Host,
+				"-u", Config.Ipmi[index].User,
+				"-p", Config.Ipmi[index].Pwd})
 			if err != nil {
 				log.Error(Config.Ipmi[index].Host, err.Error())
 				ipmiErrGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -519,9 +519,7 @@ func (service *Service) Manage() (string, error) {
 	// Create a new cron manager
 	c := cron.New(cron.WithSeconds())
 	// Run makefile every min
-	c.AddFunc("*/"+strconv.Itoa(config.Global.Interval)+" * * * * *", func() {
-		IPMIMonitor()
-	})
+	c.AddFunc("*/"+strconv.Itoa(config.Global.Interval)+" * * * * *", IPMIMonitor )
 	c.Start()
 	select {}
 	// Waiting for interrupt by system signal
