@@ -215,7 +215,7 @@ func collectMonitoring(index int, Config Config) {
 		switch Mclass {
 		case "ipmimonitoring":
 			pusher := push.New(Config.Global.Pushgateway, Config.Global.IPMIJob)
-			//output := readFile("./hpIPMI.txt")
+			//output,err := readFile("./file/hpIPMI.txt")
 			output, err := execute("ipmimonitoring", []string{
 				"-D", Config.Global.Driver,
 				"-h", Config.Ipmi[index].Host,
@@ -272,8 +272,7 @@ func collectMonitoring(index int, Config Config) {
 				}
 			}
 
-			instanceName := "ipmi_" + config.Ipmi[index].Host
-			if err := pusher.Grouping("instance", instanceName).Push(); err != nil {
+			if err := pusher.Grouping("instance", "ipmi").Push(); err != nil {
 				//log.Error("Could not push completion time to Pushgateway:", err)
 				log.Error(config.Ipmi[index].Host, err)
 			} else {
@@ -282,7 +281,7 @@ func collectMonitoring(index int, Config Config) {
 			}
 		case "ipmi-chassis":
 			pusher := push.New(Config.Global.Pushgateway, Config.Global.IPMIJob)
-			//output:= readFile("./sugonClass.txt")
+			//output,err := readFile("./file/sugonClass.txt")
 			output, err := execute("ipmi-chassis", []string{
 				"-D", Config.Global.Driver,
 				"-h", Config.Ipmi[index].Host,
@@ -342,8 +341,7 @@ func collectMonitoring(index int, Config Config) {
 					}
 				}
 			}
-			instanceName := "class_" + config.Ipmi[index].Host
-			if err := pusher.Grouping("instance", instanceName).Push(); err != nil {
+			if err := pusher.Grouping("instance", "chassis").Push(); err != nil {
 				log.Error("Could not push completion to Pushgateway:", config.Ipmi[index].Host, err)
 				return
 			} else {
@@ -352,7 +350,7 @@ func collectMonitoring(index int, Config Config) {
 			}
 		case "ipmi-dcmi":
 			pusher := push.New(Config.Global.Pushgateway, Config.Global.IPMIJob)
-			//output,err := readFile("./file/dugonDcmi.txt")
+			//output,err := readFile("./file/hpDcmi.txt")
 			output, err := execute("ipmi-dcmi", []string{
 				"-D", Config.Global.Driver,
 				"-h", Config.Ipmi[index].Host,
@@ -384,7 +382,7 @@ func collectMonitoring(index int, Config Config) {
 							dcmiGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 								Name: "Current_Power",
 								Help: "",
-							}, []string{"Host","Unit"})
+							}, []string{"Host","Type"})
 							values := strings.Split(dcmi.Status," ")
 							val,err := strconv.ParseFloat(values[0], 64)
 							if err != nil {
@@ -396,7 +394,7 @@ func collectMonitoring(index int, Config Config) {
 							dcmiGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 								Name: "Minimum_Power_over_sampling_duration",
 								Help: "",
-							}, []string{"Host","Unit"})
+							}, []string{"Host","Type"})
 							values := strings.Split(dcmi.Status," ")
 							val,err := strconv.ParseFloat(values[0], 64)
 							if err != nil {
@@ -408,7 +406,7 @@ func collectMonitoring(index int, Config Config) {
 							dcmiGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 								Name: "Maximum_Power_over_sampling_duration",
 								Help: "",
-							}, []string{"Host","Unit"})
+							}, []string{"Host","Type"})
 							values := strings.Split(dcmi.Status," ")
 							val,err := strconv.ParseFloat(values[0], 64)
 							if err != nil {
@@ -420,7 +418,7 @@ func collectMonitoring(index int, Config Config) {
 							dcmiGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 								Name: "Average_Power_over_sampling_duration",
 								Help: "",
-							}, []string{"Host","Unit"})
+							}, []string{"Host","Type"})
 							values := strings.Split(dcmi.Status," ")
 							val,err := strconv.ParseFloat(values[0], 64)
 							if err != nil {
@@ -432,7 +430,7 @@ func collectMonitoring(index int, Config Config) {
 							dcmiGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 								Name: "Time_Stamp",
 								Help: "",
-							}, []string{"Host","Time_Stamp"})
+							}, []string{"Host","Type"})
 							if err != nil {
 								log.Error(err.Error())
 							}
@@ -442,7 +440,7 @@ func collectMonitoring(index int, Config Config) {
 							dcmiGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 								Name: "Statistics_reporting_time_period",
 								Help: "",
-							}, []string{"Host","Unit"})
+							}, []string{"Host","Type"})
 							values := strings.Split(dcmi.Status," ")
 							val,err := strconv.ParseFloat(values[0], 64)
 							if err != nil {
@@ -466,13 +464,12 @@ func collectMonitoring(index int, Config Config) {
 
 
 			}
-			instanceName := "dcmi_" + config.Ipmi[index].Host
-			if err := pusher.Grouping("instance", instanceName).Push(); err != nil {
+			if err := pusher.Grouping("instance", "dcmi").Push(); err != nil {
 				log.Error("Could not push completion to Pushgateway:", config.Ipmi[index].Host, err)
 				return
 			} else {
 				pushFlag = true
-				log.Info("chassis push success:", config.Ipmi[index].Host)
+				log.Info("dcmi push success:", config.Ipmi[index].Host)
 			}
 		}
 	}
@@ -545,6 +542,7 @@ func main() {
 		log.Error(status, "\nError: ", err)
 		os.Exit(1)
 	}
+	fmt.Println(status)
 }
 
 // 单独的IPMI监控协程
