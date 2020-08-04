@@ -222,7 +222,7 @@ func collectMonitoring(index int, Config Config) {
 				"-u", Config.Ipmi[index].User,
 				"-p", Config.Ipmi[index].Pwd})
 			if err != nil {
-				log.Error(err.Error())
+				log.Error(Config.Ipmi[index].Host, err.Error())
 				ipmiErrGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 					Name: "MonitorMessage",
 					Help: "",
@@ -232,7 +232,7 @@ func collectMonitoring(index int, Config Config) {
 			} else {
 				results, err := splitMonitoringOutput(output)
 				if err != nil {
-					log.Error(err.Error())
+					log.Error(Config.Ipmi[index].Host, err.Error())
 					ipmiErrGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 						Name: "MonitorMessage",
 						Help: "",
@@ -253,7 +253,7 @@ func collectMonitoring(index int, Config Config) {
 							state = math.NaN()
 						default:
 							state = math.NaN()
-							log.Error(data.State)
+							log.Error(Config.Ipmi[index].Host, data.State)
 						}
 
 						ipmiGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -289,7 +289,7 @@ func collectMonitoring(index int, Config Config) {
 				"-p", Config.Ipmi[index].Pwd,
 				"--get-status"})
 			if err != nil {
-				log.Error(err.Error())
+				log.Error(Config.Ipmi[index].Host, err.Error())
 				ipmiErrGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 					Name: "ChassisMessage",
 					Help: "",
@@ -299,7 +299,7 @@ func collectMonitoring(index int, Config Config) {
 			} else {
 				chass, err := splitBaseOutput(output)
 				if err != nil {
-					log.Error(err.Error())
+					log.Error(Config.Ipmi[index].Host, err.Error())
 					ipmiErrGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 						Name: "ChassisMessage",
 						Help: "",
@@ -358,7 +358,7 @@ func collectMonitoring(index int, Config Config) {
 				"-p", Config.Ipmi[index].Pwd,
 				"--get-system-power-statistics"})
 			if err != nil {
-				log.Error(err.Error())
+				log.Error(Config.Ipmi[index].Host, err.Error())
 				ipmiErrGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 					Name: "DcmiMessage",
 					Help: "",
@@ -368,7 +368,7 @@ func collectMonitoring(index int, Config Config) {
 			} else {
 				dcmis,err := splitBaseOutput(output)
 				if err != nil {
-					log.Error(err.Error())
+					log.Error(Config.Ipmi[index].Host, err.Error())
 					ipmiErrGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 						Name: "DcmiMessage",
 						Help: "",
@@ -386,7 +386,7 @@ func collectMonitoring(index int, Config Config) {
 							values := strings.Split(dcmi.Status," ")
 							val,err := strconv.ParseFloat(values[0], 64)
 							if err != nil {
-								log.Error(err.Error())
+								log.Error(Config.Ipmi[index].Host, err.Error())
 							}
 							dcmiGauge.WithLabelValues(Config.Ipmi[index].Host,values[1]).Set(val)
 							pusher.Collector(dcmiGauge)
@@ -398,7 +398,7 @@ func collectMonitoring(index int, Config Config) {
 							values := strings.Split(dcmi.Status," ")
 							val,err := strconv.ParseFloat(values[0], 64)
 							if err != nil {
-								log.Error(err.Error())
+								log.Error(Config.Ipmi[index].Host, err.Error())
 							}
 							dcmiGauge.WithLabelValues(Config.Ipmi[index].Host,values[1]).Set(val)
 							pusher.Collector(dcmiGauge)
@@ -410,7 +410,7 @@ func collectMonitoring(index int, Config Config) {
 							values := strings.Split(dcmi.Status," ")
 							val,err := strconv.ParseFloat(values[0], 64)
 							if err != nil {
-								log.Error(err.Error())
+								log.Error(Config.Ipmi[index].Host, err.Error())
 							}
 							dcmiGauge.WithLabelValues(Config.Ipmi[index].Host,values[1]).Set(val)
 							pusher.Collector(dcmiGauge)
@@ -422,7 +422,7 @@ func collectMonitoring(index int, Config Config) {
 							values := strings.Split(dcmi.Status," ")
 							val,err := strconv.ParseFloat(values[0], 64)
 							if err != nil {
-								log.Error(err.Error())
+								log.Error(Config.Ipmi[index].Host, err.Error())
 							}
 							dcmiGauge.WithLabelValues(Config.Ipmi[index].Host,values[1]).Set(val)
 							pusher.Collector(dcmiGauge)
@@ -432,7 +432,7 @@ func collectMonitoring(index int, Config Config) {
 								Help: "",
 							}, []string{"Host","Type"})
 							if err != nil {
-								log.Error(err.Error())
+								log.Error(Config.Ipmi[index].Host, err.Error())
 							}
 							dcmiGauge.WithLabelValues(Config.Ipmi[index].Host,dcmi.Status).Set(0)
 							pusher.Collector(dcmiGauge)
@@ -444,7 +444,7 @@ func collectMonitoring(index int, Config Config) {
 							values := strings.Split(dcmi.Status," ")
 							val,err := strconv.ParseFloat(values[0], 64)
 							if err != nil {
-								log.Error(err.Error())
+								log.Error(Config.Ipmi[index].Host, err.Error())
 							}
 							dcmiGauge.WithLabelValues(Config.Ipmi[index].Host,values[1]).Set(val)
 							pusher.Collector(dcmiGauge)
@@ -454,7 +454,7 @@ func collectMonitoring(index int, Config Config) {
 								Help: "",
 							}, []string{"Host"})
 							if err != nil {
-								log.Error(err.Error())
+								log.Error(Config.Ipmi[index].Host, err.Error())
 							}
 							dcmiGauge.WithLabelValues(Config.Ipmi[index].Host).Set(getState(dcmi.Status,"Active"))
 							pusher.Collector(dcmiGauge)
@@ -561,24 +561,41 @@ func parseSnmp(ip string, oid string, flag string) {
 	pusher := push.New(config.Global.Pushgateway, config.Global.SNMPJob)
 
 	session, err := wapsnmp.NewWapSNMP(ip, READ_COMM, wapsnmp.SNMPv2c, 2*time.Second, 1)
+	defer session.Close()
 	if err != nil {
 		log.Error("SNMP_CONN_FAIL creating session => %v\n", err)
+		snmpGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: flag,
+			Help: "help..",
+		}, []string{"Host", "Type","Oid"})
+		snmpGauge.WithLabelValues( ip,"Err", oid).Set(0)
+	} else {
+		val, err := session.Get(wapsnmp.MustParseOid(oid))
+		if err != nil {
+			log.Error("SNMP_OID_FAIL getting => %v\n", err)
+			snmpGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+				Name: flag,
+				Help: "help..",
+			}, []string{"Host", "Type","Oid"})
+			snmpGauge.WithLabelValues( ip,"Err", oid).Set(0)
+		} else {
+			value := val.(float64)
+			snmpGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+				Name: flag,
+				Help: "help..",
+			}, []string{ "Host", "Type", "Oid"})
+			snmpGauge.WithLabelValues(ip, flag, oid).Set(value)
+		}
 	}
-	defer session.Close()
-
-	val, err := session.Get(wapsnmp.MustParseOid(oid))
-	if err != nil {
-		log.Error("SNMP_OID_FAIL getting => %v\n", err)
-	}
-	value := val.(float64)
-
-	snmpGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: flag,
-		Help: "help..",
-	}, []string{"type", "Host", "Oid"})
-	snmpGauge.WithLabelValues(flag, ip, oid).Set(value)
-
 	pusher.Collector(snmpGauge)
+
+	if err := pusher.Grouping("instance", "snmp").Push(); err != nil {
+		log.Error("Could not push completion to Pushgateway:", ip, err)
+		return
+	} else {
+		pushFlag = true
+		log.Info("snmp push success:", ip)
+	}
 
 	select {
 	case <-ctx.Done():
