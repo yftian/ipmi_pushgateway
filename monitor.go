@@ -215,12 +215,12 @@ func collectMonitoring(index int, Config Config) {
 		switch Mclass {
 		case "ipmimonitoring":
 			pusher := push.New(Config.Global.Pushgateway, Config.Global.IPMIJob)
-			//output,err := readFile("./file/hpIPMI.txt")
-			output, err := execute("ipmimonitoring", []string{
-				"-D", Config.Global.Driver,
-				"-h", Config.Ipmi[index].Host,
-				"-u", Config.Ipmi[index].User,
-				"-p", Config.Ipmi[index].Pwd})
+			output,err := readFile("./file/hpIPMI.txt")
+			//output, err := execute("ipmimonitoring", []string{
+			//	"-D", Config.Global.Driver,
+			//	"-h", Config.Ipmi[index].Host,
+			//	"-u", Config.Ipmi[index].User,
+			//	"-p", Config.Ipmi[index].Pwd})
 			if err != nil {
 				log.Error(Config.Ipmi[index].Host, err.Error())
 				ipmiErrGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -272,7 +272,7 @@ func collectMonitoring(index int, Config Config) {
 				}
 			}
 
-			if err := pusher.Grouping("instance", "ipmi").Push(); err != nil {
+			if err := pusher.Grouping("instance", "ipmi_" + config.Ipmi[index].Host).Push(); err != nil {
 				//log.Error("Could not push completion time to Pushgateway:", err)
 				log.Error(config.Ipmi[index].Host, err)
 			} else {
@@ -341,7 +341,7 @@ func collectMonitoring(index int, Config Config) {
 					}
 				}
 			}
-			if err := pusher.Grouping("instance", "chassis").Push(); err != nil {
+			if err := pusher.Grouping("instance", "chassis_" + config.Ipmi[index].Host).Push(); err != nil {
 				log.Error("Could not push completion to Pushgateway:", config.Ipmi[index].Host, err)
 				return
 			} else {
@@ -464,7 +464,7 @@ func collectMonitoring(index int, Config Config) {
 
 
 			}
-			if err := pusher.Grouping("instance", "dcmi").Push(); err != nil {
+			if err := pusher.Grouping("instance", "dcmi_" + config.Ipmi[index].Host).Push(); err != nil {
 				log.Error("Could not push completion to Pushgateway:", config.Ipmi[index].Host, err)
 				return
 			} else {
@@ -548,6 +548,7 @@ func main() {
 // 单独的IPMI监控协程
 func IPMIMonitor() {
 	for i, _ := range config.Ipmi {
+		fmt.Println(i)
 		go collectMonitoring(i, config)
 	}
 }
