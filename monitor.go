@@ -8,6 +8,7 @@ import (
 	"github.com/cdevr/WapSNMP"
 	log "github.com/cihub/seelog"
 	"github.com/jinzhu/configor"
+	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/push"
 	"github.com/robfig/cron/v3"
@@ -176,8 +177,9 @@ func execute(name string, args []string) ([]byte, error) {
 	err := cmd.Run()
 	if err != nil {
 		log.Error(fmt.Sprint(err) + ":" + stderr.String())
+		return nil, errors.New(stderr.String())
 	}
-	return out.Bytes(), err
+	return out.Bytes(),err
 }
 
 func splitBaseOutput(output []byte) ([]ipmiFiled, error) {
